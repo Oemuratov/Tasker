@@ -3,7 +3,7 @@ export type TaskType = "Код" | "Арт" | "Звук" | "Полировка" |
 export type TaskData = {
   title: string;
   description?: string;
-  difficulty: "легко" | "средне" | "сложно";
+  difficulty: "Легкая" | "Средняя" | "Сложная";
   taskType: TaskType;
   completed?: boolean;
 };

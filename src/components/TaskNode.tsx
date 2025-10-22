@@ -70,7 +70,7 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
                 variant="secondary"
                 onClick={() => setOpen(true)}
               >
-                Edit
+                Правка
               </Button>
             )}
             {!isCompleted ? (
@@ -81,7 +81,7 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
                 disabled={!canComplete}
                 onClick={markDone}
               >
-                Выполнено
+                ✅Выполнено
               </Button>
             ) : (
               <Button
