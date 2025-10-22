@@ -18,6 +18,7 @@ import { TaskNode } from "@/components/TaskNode";
 import { isValidConnection } from "@/lib/graph";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 import { ActiveModeToggle } from "@/components/ActiveModeToggle";
+import { ManualSyncBar } from "@/components/ManualSyncBar";
 
 const nodeTypes = { taskNode: TaskNode } as const;
 
@@ -29,6 +30,7 @@ export default function Home() {
           <Canvas />
           <CreateTaskDialog />
           <ActiveModeToggle />
+          <ManualSyncBar />
         </ReactFlowProvider>
       </div>
     </div>
