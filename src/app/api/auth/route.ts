@@ -9,7 +9,8 @@ const PASSWORD = "Hero1114";
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req.headers);
   const allowed = await readAllowed();
-  const ok = !!allowed[ip];
+  const cookieOk = req.cookies.get("tb_auth")?.value === "1";
+  const ok = cookieOk || !!allowed[ip];
   return NextResponse.json({ authorized: ok, ip });
 }
 
@@ -23,9 +24,13 @@ export async function POST(req: NextRequest) {
     const allowed = await readAllowed();
     allowed[ip] = true;
     await writeAllowed(allowed);
-    return NextResponse.json({ authorized: true, ip });
+    const res = NextResponse.json({ authorized: true, ip });
+    res.headers.set(
+      "Set-Cookie",
+      "tb_auth=1; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax"
+    );
+    return res;
   } catch {
     return NextResponse.json({ authorized: false }, { status: 400 });
   }
 }
-

@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
     // Authorization by IP
     const ip = getClientIp(req.headers);
     const allowed = await readAllowed();
-    if (!allowed[ip]) {
+    const cookieOk = req.cookies.get("tb_auth")?.value === "1";
+    if (!(cookieOk || allowed[ip])) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
     const saved = await writeState(nodes, edges);
