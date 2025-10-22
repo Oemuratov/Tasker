@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { broadcastBoard } from "@/lib/sseBus";
 import { readState, writeState, type PersistFile } from "@/lib/serverBoardStore";
-import { getClientIp, readAllowed } from "@/lib/authServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,11 +15,9 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as Partial<PersistFile> & { nodes?: unknown[]; edges?: unknown[] };
     const nodes = Array.isArray(body.nodes) ? body.nodes : [];
     const edges = Array.isArray(body.edges) ? body.edges : [];
-    // Authorization by IP
-    const ip = getClientIp(req.headers);
-    const allowed = await readAllowed();
+    // Authorization by cookie only
     const cookieOk = req.cookies.get("tb_auth")?.value === "1";
-    if (!(cookieOk || allowed[ip])) {
+    if (!cookieOk) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
     const saved = await writeState(nodes, edges);

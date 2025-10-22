@@ -45,6 +45,8 @@ export function ManualSyncBar() {
     if (r.ok) {
       setPwOpen(false);
       setPassword("");
+      // Log to browser console after successful auth
+      try { console.log("[Taskboard] Authorization successful; cookie set."); } catch {}
       await push();
     }
   };
