@@ -11,8 +11,7 @@ function hashState(state: BoardState) {
   }
 }
 
-const SYNC_INTERVAL_MS = 5000;
-const POST_DEBOUNCE_MS = 500;
+const POST_DEBOUNCE_MS = 250;
 
 export function SyncProvider() {
   const nodes = useBoardStore((s) => s.nodes);
@@ -108,12 +107,12 @@ export function SyncProvider() {
     };
   }, [nodes, edges]);
 
-  // Periodic pull to catch remote changes
+  // Instant pull via SSE
   React.useEffect(() => {
-    const id = window.setInterval(async () => {
+    const es = new EventSource("/api/board/stream");
+    es.onmessage = (ev) => {
       try {
-        const res = await fetch("/api/board", { cache: "no-store" });
-        const remote = (await res.json()) as { version?: number; nodes: unknown[]; edges: unknown[] };
+        const remote = JSON.parse(ev.data) as { version?: number; nodes: unknown[]; edges: unknown[] };
         const remoteState: BoardState = {
           nodes: Array.isArray(remote.nodes) ? (remote.nodes as any) : [],
           edges: Array.isArray(remote.edges) ? (remote.edges as any) : [],
@@ -130,11 +129,12 @@ export function SyncProvider() {
           serverVersionRef.current = remote.version ?? serverVersionRef.current;
           localRef.current = remoteHash;
         }
-      } catch {
-        // ignore
-      }
-    }, SYNC_INTERVAL_MS);
-    return () => window.clearInterval(id);
+      } catch {}
+    };
+    es.onerror = () => {
+      // Let browser reconnect automatically
+    };
+    return () => es.close();
   }, [setAll]);
 
   return null;
