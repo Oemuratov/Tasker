@@ -1,10 +1,11 @@
-export type TaskType = "code" | "art" | "audio" | "design" | "other";
+export type TaskType = "Код" | "Арт" | "Звук" | "Полировка" | "Маркетинг" | "Другое";
 
 export type TaskData = {
   title: string;
   description?: string;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: "легко" | "средне" | "сложно";
   taskType: TaskType;
+  completed?: boolean;
 };
 
 export type TaskNode = {
@@ -27,4 +28,3 @@ export type BoardState = {
   nodes: TaskNode[];
   edges: DependencyEdge[];
 };
-

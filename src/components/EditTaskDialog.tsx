@@ -55,11 +55,12 @@ export function EditTaskDialog({
               value={data.taskType}
               onChange={(e) => setData((d) => ({ ...d, taskType: e.target.value as TaskType }))}
             >
-              <option value="code">code</option>
-              <option value="art">art</option>
-              <option value="audio">audio</option>
-              <option value="design">design</option>
-              <option value="other">other</option>
+              <option value="Код">Код</option>
+              <option value="Арт">Арт</option>
+              <option value="Звук">Звук</option>
+              <option value="Полировка">Полировка</option>
+              <option value="Маркетинг">Маркетинг</option>
+              <option value="Другое">Другое</option>
             </Select>
           </label>
           <label className="text-sm font-medium text-slate-700">
@@ -86,14 +87,12 @@ export function EditTaskDialog({
             <Select
               aria-label="Сложность"
               className="mt-1"
-              value={String(data.difficulty)}
-              onChange={(e) => setData((d) => ({ ...d, difficulty: Number(e.target.value) as TaskData["difficulty"] }))}
+              value={data.difficulty}
+              onChange={(e) => setData((d) => ({ ...d, difficulty: e.target.value as TaskData["difficulty"] }))}
             >
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
+              <option value="легко">легко</option>
+              <option value="средне">средне</option>
+              <option value="сложно">сложно</option>
             </Select>
           </label>
         </div>
@@ -110,4 +109,3 @@ export function EditTaskDialog({
     </Dialog>
   );
 }
-

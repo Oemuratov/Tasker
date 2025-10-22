@@ -16,7 +16,6 @@ import { TaskNode as TaskNodeType, DependencyEdge } from "@/types/board";
 import { useEdges, useNodes, useBoardStore } from "@/store/useBoardStore";
 import { TaskNode } from "@/components/TaskNode";
 import { isValidConnection } from "@/lib/graph";
-import { TopBar } from "@/components/TopBar";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 
 const nodeTypes = { taskNode: TaskNode } as const;
@@ -24,8 +23,7 @@ const nodeTypes = { taskNode: TaskNode } as const;
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-900">
-      <TopBar />
-      <div className="relative h-[calc(100vh-49px)] w-full">
+      <div className="relative h-screen w-full">
         <ReactFlowProvider>
           <Canvas />
           <CreateTaskDialog />
@@ -73,7 +71,7 @@ function Canvas() {
       onEdgeClick={(_, edge) => removeEdgeAction(edge.id)}
       fitView
     >
-      <MiniMap className="!right-2 !bottom-2 !left-auto !top-auto" />
+      <MiniMap className="!right-2 !top-2 !left-auto !bottom-auto" />
       <Controls />
       <Background />
     </ReactFlow>
