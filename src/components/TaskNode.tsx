@@ -6,6 +6,19 @@ import { Button } from "@/components/ui/button";
 import { EditTaskDialog } from "@/components/EditTaskDialog";
 import { useBoardStore } from "@/store/useBoardStore";
 
+// Accent colors for task types (border + button color). Use ! to ensure override.
+type Accent = { border: string; btn: string; ring: string };
+const typeToAccent: Record<TaskType, Accent> = {
+  "Код": { border: "border-blue-500", btn: "!bg-blue-500 hover:!bg-blue-600 !text-white", ring: "focus-visible:!ring-blue-500" },
+  "Арт": { border: "border-rose-500", btn: "!bg-rose-500 hover:!bg-rose-600 !text-white", ring: "focus-visible:!ring-rose-500" },
+  "Звук": { border: "border-emerald-500", btn: "!bg-emerald-500 hover:!bg-emerald-600 !text-white", ring: "focus-visible:!ring-emerald-500" },
+  "Полировка": { border: "border-purple-500", btn: "!bg-purple-500 hover:!bg-purple-600 !text-white", ring: "focus-visible:!ring-purple-500" },
+  "Маркетинг": { border: "border-amber-400", btn: "!bg-amber-500 hover:!bg-amber-600 !text-white", ring: "focus-visible:!ring-amber-500" },
+  "Тестирование": { border: "border-cyan-500", btn: "!bg-cyan-500 hover:!bg-cyan-600 !text-white", ring: "focus-visible:!ring-cyan-500" },
+  "Контент": { border: "border-orange-400", btn: "!bg-orange-500 hover:!bg-orange-600 !text-white", ring: "focus-visible:!ring-orange-500" },
+  "Другое": { border: "border-slate-400", btn: "!bg-slate-500 hover:!bg-slate-600 !text-white", ring: "focus-visible:!ring-slate-500" },
+};
+
 const typeToBg: Record<TaskType, string> = {
   "Код": "bg-blue-500",
   "Арт": "bg-rose-500",
@@ -43,33 +56,36 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
     updateNode(id, { completed: false });
   };
 
+  const accent = isCompleted
+    ? { border: "border-slate-400", btn: "bg-slate-400 hover:bg-slate-500 text-white", ring: "focus-visible:ring-slate-400" }
+    : typeToAccent[data.taskType as TaskType];
+
   return (
     <div
       onDoubleClick={onDoubleClick}
-      className={`relative select-none rounded-xl shadow-lg border border-slate-200 p-5 w-96 sm:w-[28rem] ${typeToBg[data.taskType]} ${
-        isCompleted ? "opacity-75 grayscale" : ""
-      }`}
+      className={`relative select-none rounded-xl shadow-lg bg-white text-slate-900 p-5 w-96 sm:w-[28rem] border-8 ${accent.border}`}
     >
-      <div className="flex flex-col gap-2 text-white">
-        <div className="flex items-center justify-between">
-          <h3 className="truncate font-semibold text-base" title={data.title}>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-semibold text-base leading-5 break-words whitespace-normal pr-2 flex-1 min-w-0" title={data.title}>
             {data.title}
           </h3>
-          <span className="rounded bg-white/20 px-2 py-0.5 text-xs capitalize">
+          <span className={`rounded px-2 py-0.5 text-xs capitalize ${badgeForDifficulty(data.difficulty)}`}>
             {data.difficulty}
           </span>
         </div>
         {data.description ? (
-          <p className="text-sm/5 text-white/90 break-words whitespace-pre-wrap">{data.description}</p>
+          <p className="text-sm/5 text-slate-700 break-words whitespace-pre-wrap">{data.description}</p>
         ) : null}
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-xs font-medium text-white/90">{labelForType(data.taskType)}</span>
+          <span className="text-xs font-medium text-slate-600">{labelForType(data.taskType)}</span>
           <div className="flex gap-2">
             {!isCompleted && (
               <Button
                 aria-label="Редактировать задачу"
                 size="sm"
                 variant="secondary"
+                className={`${accent.btn} ${accent.ring}`}
                 onClick={() => setOpen(true)}
               >
                 Правка
@@ -81,6 +97,7 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
                 size="sm"
                 variant="secondary"
                 disabled={!canComplete}
+                className={`${accent.btn} ${accent.ring}`}
                 onClick={markDone}
               >
                 ✅Выполнено
@@ -90,6 +107,7 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
                 aria-label="Отменить выполнение"
                 size="sm"
                 variant="secondary"
+                className={`${accent.btn} ${accent.ring}`}
                 onClick={markUndone}
               >
                 Отмена
@@ -135,4 +153,11 @@ function labelForType(t: TaskType): string {
     default:
       return "🧩 Другое";
   }
+}
+
+function badgeForDifficulty(d: string): string {
+  const s = (d || "").toString().toLowerCase();
+  if (s.includes("легк")) return "bg-green-100 text-green-700"; // Легкая / легко
+  if (s.includes("слож")) return "bg-red-100 text-red-700"; // Сложная / сложно
+  return "bg-amber-100 text-amber-800"; // Средняя / средне (по умолчанию)
 }

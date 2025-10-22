@@ -7,6 +7,8 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTML
       <textarea
         ref={ref}
         rows={rows}
+        spellCheck={props.spellCheck ?? true}
+        lang={(props as any).lang ?? "ru"}
         className={`w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
         {...props}
       />
@@ -14,4 +16,3 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTML
   }
 );
 Textarea.displayName = "Textarea";
-
