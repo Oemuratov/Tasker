@@ -91,9 +91,9 @@ export function EditTaskDialog({
               value={data.difficulty}
               onValueChange={(v) => setData((d) => ({ ...d, difficulty: v as TaskData["difficulty"] }))}
               options={[
-                { value: "легко", label: "легко" },
-                { value: "средне", label: "средне" },
-                { value: "сложно", label: "сложно" },
+                { value: "Легкая", label: "Легкая" },
+                { value: "Средняя", label: "Средняя" },
+                { value: "Сложная", label: "Сложная" },
               ]}
             />
           </label>
