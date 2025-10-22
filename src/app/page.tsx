@@ -17,6 +17,7 @@ import { useEdges, useNodes, useBoardStore } from "@/store/useBoardStore";
 import { TaskNode } from "@/components/TaskNode";
 import { isValidConnection } from "@/lib/graph";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
+import { ActiveModeToggle } from "@/components/ActiveModeToggle";
 
 const nodeTypes = { taskNode: TaskNode } as const;
 
@@ -27,6 +28,7 @@ export default function Home() {
         <ReactFlowProvider>
           <Canvas />
           <CreateTaskDialog />
+          <ActiveModeToggle />
         </ReactFlowProvider>
       </div>
     </div>

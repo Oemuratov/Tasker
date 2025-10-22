@@ -12,15 +12,20 @@ type Actions = {
   addEdge: (edge: Omit<DependencyEdge, "id">) => void;
   removeEdge: (id: string) => void;
   setAll: (nodes: TaskNode[], edges: DependencyEdge[]) => void;
+  setActiveMode: (v: boolean) => void;
+  toggleActiveMode: () => void;
 };
 
-type Store = BoardState & Actions;
+type Store = BoardState & Actions & {
+  activeMode: boolean;
+};
 
 export const useBoardStore = create<Store>()(
   persist(
     (set, get) => ({
       nodes: [],
       edges: [],
+      activeMode: false,
 
       addNode: (data, position) => {
         const id = crypto.randomUUID();
@@ -65,6 +70,9 @@ export const useBoardStore = create<Store>()(
       },
 
       setAll: (nodes, edges) => set({ nodes, edges }),
+
+      setActiveMode: (v) => set({ activeMode: v }),
+      toggleActiveMode: () => set({ activeMode: !get().activeMode }),
     }),
     {
       name: STORAGE_KEY,
@@ -76,4 +84,4 @@ export const useBoardStore = create<Store>()(
 
 export const useNodes = () => useBoardStore((s) => s.nodes);
 export const useEdges = () => useBoardStore((s) => s.edges);
-
+export const useActiveMode = () => useBoardStore((s) => s.activeMode);

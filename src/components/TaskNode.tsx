@@ -60,10 +60,14 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
     ? { border: "border-slate-400", btn: "bg-slate-400 hover:bg-slate-500 text-white", ring: "focus-visible:ring-slate-400" }
     : typeToAccent[data.taskType as TaskType];
 
+  // Active tasks highlighting
+  const activeMode = useBoardStore((s) => s.activeMode);
+  const modeClass = activeMode ? (canComplete ? "ring-4 ring-green-500/60 shadow-xl" : "opacity-50 grayscale") : "";
+
   return (
     <div
       onDoubleClick={onDoubleClick}
-      className={`relative select-none rounded-xl shadow-lg bg-white text-slate-900 p-5 w-96 sm:w-[28rem] border-8 ${accent.border}`}
+      className={`relative select-none rounded-xl shadow-lg bg-white text-slate-900 p-5 w-96 sm:w-[28rem] border-8 ${accent.border} ${modeClass}`}
     >
       <div className="flex flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
