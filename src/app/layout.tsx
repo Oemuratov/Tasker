@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SyncProvider } from "@/components/SyncProvider";
 
 export const metadata: Metadata = {
   title: "Tasker",
@@ -14,6 +15,7 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className={`antialiased`}>
+        <SyncProvider />
         {children}
       </body>
     </html>
