@@ -22,6 +22,7 @@ export function SyncProvider() {
   const localRef = React.useRef<string>("");
   const lastPushedRef = React.useRef<string>("");
   const mountedRef = React.useRef(false);
+  const serverVersionRef = React.useRef(0);
   const postTimer = React.useRef<number | null>(null);
 
   // Initial pull (or seed if server empty)
@@ -30,29 +31,42 @@ export function SyncProvider() {
     (async () => {
       try {
         const res = await fetch("/api/board", { cache: "no-store" });
-        const remote = (await res.json()) as { nodes: unknown[]; edges: unknown[] };
+        const remote = (await res.json()) as { version?: number; nodes: unknown[]; edges: unknown[] };
         const remoteState: BoardState = {
           nodes: Array.isArray(remote.nodes) ? (remote.nodes as any) : [],
           edges: Array.isArray(remote.edges) ? (remote.edges as any) : [],
         };
-        const localState: BoardState = { nodes, edges };
+        // Read freshest local state at decision time (avoid stale closure)
+        const st = useBoardStore.getState();
+        const localState: BoardState = { nodes: st.nodes, edges: st.edges };
         const remoteHash = hashState(remoteState);
         const localHash = hashState(localState);
         if (cancelled) return;
         if (remoteHash === hashState({ nodes: [], edges: [] })) {
-          // Server empty → seed with local
-          await fetch("/api/board", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(localState),
-          });
-          lastPushedRef.current = localHash;
-        } else if (remoteHash !== localHash) {
-          // Server has data → adopt it locally
-          setAll(remoteState.nodes as any, remoteState.edges as any);
-          lastPushedRef.current = remoteHash;
+          // Server empty → seed with local (only if local is not empty)
+          if (localState.nodes.length || localState.edges.length) {
+            const r = await fetch("/api/board", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(localState),
+            });
+            const saved = (await r.json()) as { version?: number };
+            serverVersionRef.current = saved.version ?? 0;
+            lastPushedRef.current = localHash;
+          } else {
+            serverVersionRef.current = remote.version ?? 0;
+            lastPushedRef.current = localHash;
+          }
         } else {
-          lastPushedRef.current = localHash;
+          // Server has data
+          serverVersionRef.current = remote.version ?? serverVersionRef.current;
+          if (remoteHash !== localHash && (!localState.nodes.length && !localState.edges.length)) {
+            // Only adopt remote if local is empty
+            setAll(remoteState.nodes as any, remoteState.edges as any);
+            lastPushedRef.current = remoteHash;
+          } else {
+            lastPushedRef.current = localHash;
+          }
         }
         localRef.current = hashState({ nodes: useBoardStore.getState().nodes, edges: useBoardStore.getState().edges });
       } catch {
@@ -75,11 +89,15 @@ export function SyncProvider() {
     postTimer.current = window.setTimeout(async () => {
       try {
         if (newHash === lastPushedRef.current) return;
-        await fetch("/api/board", {
+        const r = await fetch("/api/board", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ nodes, edges }),
         });
+        try {
+          const saved = (await r.json()) as { version?: number };
+          serverVersionRef.current = saved.version ?? serverVersionRef.current + 1;
+        } catch {}
         lastPushedRef.current = newHash;
       } catch {
         // ignore transient errors
@@ -95,15 +113,21 @@ export function SyncProvider() {
     const id = window.setInterval(async () => {
       try {
         const res = await fetch("/api/board", { cache: "no-store" });
-        const remote = (await res.json()) as { nodes: unknown[]; edges: unknown[] };
+        const remote = (await res.json()) as { version?: number; nodes: unknown[]; edges: unknown[] };
         const remoteState: BoardState = {
           nodes: Array.isArray(remote.nodes) ? (remote.nodes as any) : [],
           edges: Array.isArray(remote.edges) ? (remote.edges as any) : [],
         };
         const remoteHash = hashState(remoteState);
-        if (remoteHash && remoteHash !== lastPushedRef.current && remoteHash !== localRef.current) {
+        if (
+          (remote.version ?? 0) > serverVersionRef.current &&
+          remoteHash &&
+          remoteHash !== lastPushedRef.current &&
+          remoteHash !== localRef.current
+        ) {
           setAll(remoteState.nodes as any, remoteState.edges as any);
           lastPushedRef.current = remoteHash;
+          serverVersionRef.current = remote.version ?? serverVersionRef.current;
           localRef.current = remoteHash;
         }
       } catch {
@@ -115,4 +139,3 @@ export function SyncProvider() {
 
   return null;
 }
-
