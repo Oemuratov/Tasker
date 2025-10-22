@@ -16,6 +16,7 @@ export function Select({ value, onValueChange, options, placeholder, className =
   const selected = options.find((o) => o.value === value);
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
   const closerRef = React.useRef<((this: Document, ev: MouseEvent) => any) | null>(null);
 
   React.useEffect(() => {
@@ -29,6 +30,12 @@ export function Select({ value, onValueChange, options, placeholder, className =
       closerRef.current = closer;
       document.addEventListener("click", closer, { once: true });
     }, 0);
+    // Prevent React Flow from zooming when the menu is open
+    const stopWheel = (e: WheelEvent) => {
+      e.stopPropagation();
+    };
+    menuRef.current?.addEventListener("wheel", stopWheel, { passive: false });
+
     return () => {
       document.removeEventListener("keydown", onKey);
       window.clearTimeout(timeoutId);
@@ -37,6 +44,7 @@ export function Select({ value, onValueChange, options, placeholder, className =
         document.removeEventListener("click", closerRef.current);
         closerRef.current = null;
       }
+      menuRef.current?.removeEventListener("wheel", stopWheel as any);
     };
   }, [open]);
 
@@ -64,6 +72,8 @@ export function Select({ value, onValueChange, options, placeholder, className =
       {open && (
         <div
           role="listbox"
+          ref={menuRef}
+          onWheel={(e) => e.stopPropagation()}
           className="absolute z-20 mt-2 max-h-56 w-full overflow-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg ring-1 ring-black/5 transition-all duration-150 origin-top scale-100 opacity-100"
         >
           {options.map((opt) => (
