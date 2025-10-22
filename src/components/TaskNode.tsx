@@ -58,10 +58,10 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
           </span>
         </div>
         {data.description ? (
-          <p className="text-sm/5 text-white/90 break-words">{data.description}</p>
+          <p className="text-sm/5 text-white/90 break-words whitespace-pre-wrap">{data.description}</p>
         ) : null}
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-xs font-medium text-white/90">{data.taskType}</span>
+          <span className="text-xs font-medium text-white/90">{labelForType(data.taskType)}</span>
           <div className="flex gap-2">
             {!isCompleted && (
               <Button
@@ -112,3 +112,21 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
 });
 
 TaskNode.displayName = "TaskNode";
+
+function labelForType(t: TaskType): string {
+  switch (t) {
+    case "Код":
+      return "💻 Код";
+    case "Арт":
+      return "🎨 Арт";
+    case "Звук":
+      return "🔊 Звук";
+    case "Полировка":
+      return "✨ Полировка";
+    case "Маркетинг":
+      return "📣 Маркетинг";
+    case "Другое":
+    default:
+      return "🧩 Другое";
+  }
+}

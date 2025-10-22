@@ -48,18 +48,18 @@ export function CreateTaskDialog() {
             <label className="text-sm font-medium text-slate-700">
               Тип задачи
               <Select
-                aria-label="Тип задачи"
                 className="mt-1"
                 value={data.taskType}
-                onChange={(e) => setData((d) => ({ ...d, taskType: e.target.value as TaskType }))}
-              >
-                <option value="Код">Код</option>
-                <option value="Арт">Арт</option>
-                <option value="Звук">Звук</option>
-                <option value="Полировка">Полировка</option>
-                <option value="Маркетинг">Маркетинг</option>
-                <option value="Другое">Другое</option>
-              </Select>
+                onValueChange={(v) => setData((d) => ({ ...d, taskType: v as TaskType }))}
+                options={[
+                  { value: "Код", label: "💻 Код" },
+                  { value: "Арт", label: "🎨 Арт" },
+                  { value: "Звук", label: "🔊 Звук" },
+                  { value: "Полировка", label: "✨ Полировка" },
+                  { value: "Маркетинг", label: "📣 Маркетинг" },
+                  { value: "Другое", label: "🧩 Другое" },
+                ]}
+              />
             </label>
             <label className="text-sm font-medium text-slate-700">
               Название
@@ -83,15 +83,15 @@ export function CreateTaskDialog() {
             <label className="text-sm font-medium text-slate-700">
               Сложность
               <Select
-                aria-label="Сложность"
                 className="mt-1"
                 value={data.difficulty}
-                onChange={(e) => setData((d) => ({ ...d, difficulty: e.target.value as TaskData["difficulty"] }))}
-              >
-                <option value="легко">легко</option>
-                <option value="средне">средне</option>
-                <option value="сложно">сложно</option>
-              </Select>
+                onValueChange={(v) => setData((d) => ({ ...d, difficulty: v as TaskData["difficulty"] }))}
+                options={[
+                  { value: "легко", label: "легко" },
+                  { value: "средне", label: "средне" },
+                  { value: "сложно", label: "сложно" },
+                ]}
+              />
             </label>
           </div>
           <DialogFooter>
