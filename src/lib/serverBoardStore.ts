@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
 
 export type PersistFile = {
   version: number;
@@ -7,7 +8,11 @@ export type PersistFile = {
   edges: unknown[];
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// Choose a writable directory in serverless environments.
+// - On Vercel, only /tmp is writable; use it.
+// - Locally, use project /data.
+const baseDir = process.env.DATA_DIR || (process.env.VERCEL ? os.tmpdir() : process.cwd());
+const DATA_DIR = path.join(baseDir, "data");
 const DATA_FILE = path.join(DATA_DIR, "board.json");
 
 export async function ensureDir() {
@@ -34,4 +39,3 @@ export async function writeState(nodes: unknown[], edges: unknown[], version?: n
   await fs.writeFile(DATA_FILE, JSON.stringify(payload), "utf-8");
   return payload;
 }
-
