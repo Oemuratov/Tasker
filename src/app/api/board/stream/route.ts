@@ -11,11 +11,20 @@ export async function GET(req: NextRequest) {
   const current = (await readState()) ?? { version: 0, nodes: [], edges: [] };
   await writer.write(enc.encode(`data: ${JSON.stringify(current)}\n\n`));
   // Close handling
+  const interval = setInterval(async () => {
+    try {
+      await writer.write(enc.encode(`: ping\n\n`));
+    } catch {
+      clearInterval(interval);
+    }
+  }, 15000);
+
   const abort = () => {
     try {
       removeWriter(writer);
       writer.close();
     } catch {}
+    clearInterval(interval);
   };
   req.signal.addEventListener("abort", abort, { once: true });
   return new Response(readable, {
@@ -26,4 +35,5 @@ export async function GET(req: NextRequest) {
     },
   });
 }
-
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";

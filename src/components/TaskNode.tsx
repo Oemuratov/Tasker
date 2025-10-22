@@ -127,8 +127,8 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
         </div>
       ) : null}
 
-      <Handle id="top" type="target" position={Position.Top} />
-      <Handle id="bottom" type="source" position={Position.Bottom} />
+      <Handle id="top" type="target" position={Position.Top} style={{ width: 9, height: 9 }} />
+      <Handle id="bottom" type="source" position={Position.Bottom} style={{ width: 9, height: 9 }} />
 
       <EditTaskDialog open={open} onOpenChange={setOpen} nodeId={id} initial={data} />
     </div>

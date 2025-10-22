@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { broadcastBoard } from "@/lib/sseBus";
 import { readState, writeState, type PersistFile } from "@/lib/serverBoardStore";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const state = (await readState()) ?? { version: 0, nodes: [], edges: [] };
   return NextResponse.json(state, { status: 200 });
