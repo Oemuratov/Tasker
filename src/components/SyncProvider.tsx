@@ -1,141 +1,201 @@
-"use client";
-import * as React from "react";
-import { useBoardStore } from "@/store/useBoardStore";
-import type { BoardState } from "@/types/board";
+import { promises as fs } from "fs";
+import path from "path";
+import os from "os";
 
-function hashState(state: BoardState) {
+/**
+ * Минимальный формат сохраняемого графа.
+ */
+export type PersistFile = {
+  version: number;
+  nodes: unknown[];
+  edges: unknown[];
+};
+
+/**
+ * Writable-путь:
+ * - Vercel: только /tmp
+ * - локально: папка проекта
+ */
+const baseDir =
+  process.env.DATA_DIR || (process.env.VERCEL ? os.tmpdir() : process.cwd());
+const DATA_DIR = path.join(baseDir, "data");
+const DATA_FILE = path.join(DATA_DIR, "board.json");
+
+/**
+ * GitHub-параметры
+ * repo — в формате "owner/name"
+ */
+const GH_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
+const GH_REPO =
+  process.env.GITHUB_REPO || process.env.GH_REPO || "Oemuratov/tasker-sync";
+const GH_PATH =
+  process.env.GITHUB_PATH || process.env.GH_PATH || "taskboard.json";
+const GH_BRANCH =
+  process.env.GITHUB_BRANCH || process.env.GH_BRANCH || "main";
+
+type GhCache = { sha?: string };
+const g = globalThis as unknown as { __ghCache?: GhCache };
+if (!g.__ghCache) g.__ghCache = {};
+const ghCache = g.__ghCache;
+
+/**
+ * Создание локальной директории
+ */
+export async function ensureDir() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+}
+
+/**
+ * Прочитать состояние: GitHub → локальный файл (fallback)
+ */
+export async function readState(): Promise<PersistFile | null> {
+  const gh = await ghRead();
+  if (gh) return gh;
+
   try {
-    return JSON.stringify({ n: state.nodes, e: state.edges });
+    const raw = await fs.readFile(DATA_FILE, "utf-8");
+    const parsed = JSON.parse(raw) as PersistFile;
+    if (!isValidPersist(parsed)) return null;
+    return parsed;
   } catch {
-    return "";
+    return null;
   }
 }
 
-const POST_DEBOUNCE_MS = 250;
+/**
+ * Записать состояние: GitHub → локальный файл (fallback)
+ */
+export async function writeState(
+  nodes: unknown[],
+  edges: unknown[],
+  version?: number
+): Promise<PersistFile> {
+  const current = (await readState()) ?? { version: 0, nodes: [], edges: [] };
+  const nextVersion = typeof version === "number" ? version : current.version + 1;
+  const payload: PersistFile = { version: nextVersion, nodes, edges };
 
-export function SyncProvider() {
-  const nodes = useBoardStore((s) => s.nodes);
-  const edges = useBoardStore((s) => s.edges);
-  const setAll = useBoardStore((s) => s.setAll);
+  const wroteGh = await ghWrite(payload);
+  if (wroteGh) return payload;
 
-  const localRef = React.useRef<string>("");
-  const lastPushedRef = React.useRef<string>("");
-  const mountedRef = React.useRef(false);
-  const serverVersionRef = React.useRef(0);
-  const postTimer = React.useRef<number | null>(null);
+  await ensureDir();
+  await fs.writeFile(DATA_FILE, JSON.stringify(payload), "utf-8");
+  return payload;
+}
 
-  // Initial pull (or seed if server empty)
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/board", { cache: "no-store" });
-        const remote = (await res.json()) as { version?: number; nodes: unknown[]; edges: unknown[] };
-        const remoteState: BoardState = {
-          nodes: Array.isArray(remote.nodes) ? (remote.nodes as any) : [],
-          edges: Array.isArray(remote.edges) ? (remote.edges as any) : [],
-        };
-        // Read freshest local state at decision time (avoid stale closure)
-        const st = useBoardStore.getState();
-        const localState: BoardState = { nodes: st.nodes, edges: st.edges };
-        const remoteHash = hashState(remoteState);
-        const localHash = hashState(localState);
-        if (cancelled) return;
-        if (remoteHash === hashState({ nodes: [], edges: [] })) {
-          // Server empty → seed with local (only if local is not empty)
-          if (localState.nodes.length || localState.edges.length) {
-            const r = await fetch("/api/board", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(localState),
-            });
-            const saved = (await r.json()) as { version?: number };
-            serverVersionRef.current = saved.version ?? 0;
-            lastPushedRef.current = localHash;
-          } else {
-            serverVersionRef.current = remote.version ?? 0;
-            lastPushedRef.current = localHash;
-          }
-        } else {
-          // Server has data
-          serverVersionRef.current = remote.version ?? serverVersionRef.current;
-          if (remoteHash !== localHash && (!localState.nodes.length && !localState.edges.length)) {
-            // Only adopt remote if local is empty
-            setAll(remoteState.nodes as any, remoteState.edges as any);
-            lastPushedRef.current = remoteHash;
-          } else {
-            lastPushedRef.current = localHash;
-          }
-        }
-        localRef.current = hashState({ nodes: useBoardStore.getState().nodes, edges: useBoardStore.getState().edges });
-      } catch {
-        // ignore
-      } finally {
-        mountedRef.current = true;
+/* --------------------------- GitHub persistence --------------------------- */
+
+function isGhConfigured() {
+  return Boolean(GH_TOKEN && GH_REPO && GH_PATH && GH_BRANCH);
+}
+
+function isValidPersist(x: any): x is PersistFile {
+  return (
+    x &&
+    typeof x === "object" &&
+    typeof x.version === "number" &&
+    Array.isArray(x.nodes) &&
+    Array.isArray(x.edges)
+  );
+}
+
+/**
+ * Чтение taskboard.json из GitHub (Contents API)
+ * Требует: существующий файл/первый коммит в репозитории/ветке.
+ */
+async function ghRead(): Promise<PersistFile | null> {
+  if (!isGhConfigured()) return null;
+
+  try {
+    const url = `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(
+      GH_PATH
+    )}?ref=${encodeURIComponent(GH_BRANCH)}`;
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${GH_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "taskboard-sync",
+      },
+      cache: "no-store" as any,
+    });
+
+    if (!res.ok) return null;
+
+    const j: any = await res.json();
+    // Сохраняем sha для последующих обновлений
+    ghCache.sha = j.sha;
+
+    const content = Buffer.from(j.content, "base64").toString("utf-8");
+    const parsed = JSON.parse(content);
+    if (!isValidPersist(parsed)) return null;
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Запись taskboard.json в GitHub (PUT Contents API)
+ * - Поддержка первого создания файла (без sha)
+ * - retry на случай конфликта sha (409)
+ */
+async function ghWrite(payload: PersistFile): Promise<boolean> {
+  if (!isGhConfigured()) return false;
+
+  const attempt = async (): Promise<{ ok: boolean; status?: number }> => {
+    const content = Buffer.from(JSON.stringify(payload, null, 2)).toString(
+      "base64"
+    );
+
+    const body: any = {
+      message: "chore(taskboard): update board state",
+      content,
+      branch: GH_BRANCH,
+    };
+    // sha передаём только если знаем, иначе создадим файл
+    if (ghCache.sha) body.sha = ghCache.sha;
+
+    const res = await fetch(
+      `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(
+        GH_PATH
+      )}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${GH_TOKEN}`,
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+          "User-Agent": "taskboard-sync",
+        },
+        body: JSON.stringify(body),
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    );
 
-  // Debounced push on local changes
-  React.useEffect(() => {
-    if (!mountedRef.current) return;
-    const newHash = hashState({ nodes, edges });
-    localRef.current = newHash;
-    if (postTimer.current) window.clearTimeout(postTimer.current);
-    postTimer.current = window.setTimeout(async () => {
-      try {
-        if (newHash === lastPushedRef.current) return;
-        const r = await fetch("/api/board", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nodes, edges }),
-        });
-        try {
-          const saved = (await r.json()) as { version?: number };
-          serverVersionRef.current = saved.version ?? serverVersionRef.current + 1;
-        } catch {}
-        lastPushedRef.current = newHash;
-      } catch {
-        // ignore transient errors
-      }
-    }, POST_DEBOUNCE_MS);
-    return () => {
-      if (postTimer.current) window.clearTimeout(postTimer.current);
-    };
-  }, [nodes, edges]);
+    if (res.ok) {
+      const j: any = await res.json();
+      // Обновляем sha на актуальный после записи
+      ghCache.sha = j.content?.sha || ghCache.sha;
+      return { ok: true, status: res.status };
+    }
 
-  // Instant pull via SSE
-  React.useEffect(() => {
-    const es = new EventSource("/api/board/stream");
-    es.onmessage = (ev) => {
-      try {
-        const remote = JSON.parse(ev.data) as { version?: number; nodes: unknown[]; edges: unknown[] };
-        const remoteState: BoardState = {
-          nodes: Array.isArray(remote.nodes) ? (remote.nodes as any) : [],
-          edges: Array.isArray(remote.edges) ? (remote.edges as any) : [],
-        };
-        const remoteHash = hashState(remoteState);
-        if (
-          (remote.version ?? 0) > serverVersionRef.current &&
-          remoteHash &&
-          remoteHash !== lastPushedRef.current &&
-          remoteHash !== localRef.current
-        ) {
-          setAll(remoteState.nodes as any, remoteState.edges as any);
-          lastPushedRef.current = remoteHash;
-          serverVersionRef.current = remote.version ?? serverVersionRef.current;
-          localRef.current = remoteHash;
-        }
-      } catch {}
-    };
-    es.onerror = () => {
-      // Let browser reconnect automatically
-    };
-    return () => es.close();
-  }, [setAll]);
+    return { ok: false, status: res.status };
+  };
 
-  return null;
+  try {
+    // 1-я попытка
+    let r = await attempt();
+    if (r.ok) return true;
+
+    // Если конфликт sha (кто-то обновил файл), перечитываем sha и повторяем один раз
+    if (r.status === 409) {
+      await ghRead();
+      r = await attempt();
+      return r.ok;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
 }

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { broadcastBoard } from "@/lib/sseBus";
-import { readState, writeState, type PersistFile } from "@/lib/serverBoardStore";
+import { readStateWithInfo, writeStateWithInfo, type PersistFile } from "@/lib/serverBoardStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const state = (await readState()) ?? { version: 0, nodes: [], edges: [] };
-  return NextResponse.json(state, { status: 200 });
+  const { state, backend } = await readStateWithInfo();
+  const payload = state ?? { version: 0, nodes: [], edges: [] };
+  return NextResponse.json({ ...payload, backend }, { status: 200 });
 }
 
 export async function POST(req: NextRequest) {
@@ -20,12 +21,12 @@ export async function POST(req: NextRequest) {
     if (!cookieOk) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
-    const saved = await writeState(nodes, edges);
+    const { saved, backend } = await writeStateWithInfo(nodes, edges);
     // Notify subscribers via SSE
     try {
       broadcastBoard(saved);
     } catch {}
-    return NextResponse.json(saved, { status: 200 });
+    return NextResponse.json({ ...saved, backend }, { status: 200 });
   } catch (e) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }

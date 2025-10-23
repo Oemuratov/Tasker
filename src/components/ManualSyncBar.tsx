@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useBoardStore } from "@/store/useBoardStore";
 import { Dialog, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Toast } from "@/components/ui/toast";
 
 export function ManualSyncBar() {
   const setAll = useBoardStore((s) => s.setAll);
@@ -13,6 +14,7 @@ export function ManualSyncBar() {
   const [pwOpen, setPwOpen] = React.useState(false);
   const [password, setPassword] = React.useState("");
   const [busy, setBusy] = React.useState<"pull" | "push" | null>(null);
+  const [toast, setToast] = React.useState<{ open: boolean; intent: "success" | "error" | "info"; message: string }>({ open: false, intent: "info", message: "" });
 
   const pull = async () => {
     setBusy("pull");
@@ -22,6 +24,8 @@ export function ManualSyncBar() {
       const n = Array.isArray(j.nodes) ? j.nodes : [];
       const e = Array.isArray(j.edges) ? j.edges : [];
       setAll(n, e);
+      const backend: string | undefined = j.backend;
+      setToast({ open: true, intent: "success", message: backend === "github" ? "Получено с GitHub" : "Получено из временного хранилища (Vercel /tmp)" });
     } finally {
       setBusy(null);
     }
@@ -56,11 +60,18 @@ export function ManualSyncBar() {
     if (!authed) return;
     setBusy("push");
     try {
-      await fetch("/api/board", {
+      const res = await fetch("/api/board", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nodes, edges }),
       });
+      if (res.ok) {
+        const j = await res.json();
+        const backend: string | undefined = j.backend;
+        setToast({ open: true, intent: "success", message: backend === "github" ? "Загружено на GitHub" : "Загружено во временное хранилище (Vercel /tmp)" });
+      } else {
+        setToast({ open: true, intent: "error", message: "Ошибка загрузки на сервер" });
+      }
     } finally {
       setBusy(null);
     }
@@ -97,6 +108,8 @@ export function ManualSyncBar() {
           </DialogFooter>
         </form>
       </Dialog>
+
+      <Toast open={toast.open} onOpenChange={(v) => setToast((t) => ({ ...t, open: v }))} intent={toast.intent} message={toast.message} />
     </>
   );
 }

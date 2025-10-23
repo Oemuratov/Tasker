@@ -20,30 +20,44 @@ export async function ensureDir() {
 }
 
 export async function readState(): Promise<PersistFile | null> {
+  const res = await readStateWithInfo();
+  return res.state;
+}
+
+export async function readStateWithInfo(): Promise<{ state: PersistFile | null; backend: "github" | "fs" }> {
   // Try GitHub-backed storage first if configured
   const gh = await ghRead();
-  if (gh) return gh;
+  if (gh) return { state: gh, backend: "github" };
   try {
     const raw = await fs.readFile(DATA_FILE, "utf-8");
     const parsed = JSON.parse(raw) as PersistFile;
-    if (!("version" in parsed)) return null;
-    if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) return null;
-    return parsed;
+    if (!("version" in parsed)) return { state: null, backend: "fs" };
+    if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) return { state: null, backend: "fs" };
+    return { state: parsed, backend: "fs" };
   } catch {
-    return null;
+    return { state: null, backend: "fs" };
   }
 }
 
 export async function writeState(nodes: unknown[], edges: unknown[], version?: number) {
+  const { saved } = await writeStateWithInfo(nodes, edges, version);
+  return saved;
+}
+
+export async function writeStateWithInfo(
+  nodes: unknown[],
+  edges: unknown[],
+  version?: number
+): Promise<{ saved: PersistFile; backend: "github" | "fs" }> {
   const current = (await readState()) ?? { version: 0, nodes: [], edges: [] };
   const nextVersion = typeof version === "number" ? version : current.version + 1;
   const payload: PersistFile = { version: nextVersion, nodes, edges };
   // Try GitHub first if configured
   const wroteGh = await ghWrite(payload);
-  if (wroteGh) return payload;
+  if (wroteGh) return { saved: payload, backend: "github" };
   await ensureDir();
   await fs.writeFile(DATA_FILE, JSON.stringify(payload), "utf-8");
-  return payload;
+  return { saved: payload, backend: "fs" };
 }
 
 // ---------- Optional GitHub persistence (free + simple if token provided) ----------
