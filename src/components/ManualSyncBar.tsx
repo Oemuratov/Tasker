@@ -70,10 +70,10 @@ export function ManualSyncBar() {
     <>
       <div className="fixed top-6 left-6 flex gap-2">
         <Button onClick={pull} aria-label="Получить данные с сервера" disabled={busy !== null}>
-          Получить
+          ⬇️
         </Button>
         <Button onClick={push} aria-label="Загрузить данные на сервер" disabled={busy !== null}>
-          Загрузить
+          ⬆️
         </Button>
       </div>
 
