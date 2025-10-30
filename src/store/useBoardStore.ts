@@ -1,7 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BoardState, DependencyEdge, TaskData, TaskNode } from "@/types/board";
+import type { BoardState, DependencyEdge, TaskData, TaskNode, ChecklistItem } from "@/types/board";
 import { STORAGE_KEY } from "@/lib/storage";
 
 type Actions = {
@@ -14,6 +14,15 @@ type Actions = {
   setAll: (nodes: TaskNode[], edges: DependencyEdge[]) => void;
   setActiveMode: (v: boolean) => void;
   toggleActiveMode: () => void;
+  // Чеклист
+  addChecklistItem: (nodeId: string, text: string) => void;
+  updateChecklistItem: (
+    nodeId: string,
+    itemId: string,
+    patch: Partial<Pick<ChecklistItem, "text" | "done">>
+  ) => void;
+  removeChecklistItem: (nodeId: string, itemId: string) => void;
+  reorderChecklist: (nodeId: string, fromIndex: number, toIndex: number) => void;
 };
 
 type Store = BoardState & Actions & {
@@ -41,9 +50,16 @@ export const useBoardStore = create<Store>()(
 
       updateNode: (id, patch) => {
         set({
-          nodes: get().nodes.map((n) =>
-            n.id === id ? { ...n, data: { ...n.data, ...patch } } : n
-          ),
+          nodes: get().nodes.map((n) => {
+            if (n.id !== id) return n;
+            const nextData: TaskData = { ...n.data, ...patch };
+            // Если есть чеклист, и он не пустой — пересчитать completed
+            const cl = nextData.checklist;
+            if (Array.isArray(cl) && cl.length > 0) {
+              nextData.completed = cl.every((i) => !!i.done);
+            }
+            return { ...n, data: nextData };
+          }),
         });
       },
 
@@ -73,6 +89,65 @@ export const useBoardStore = create<Store>()(
 
       setActiveMode: (v) => set({ activeMode: v }),
       toggleActiveMode: () => set({ activeMode: !get().activeMode }),
+
+      // ---- Чеклист экшены ----
+      addChecklistItem: (nodeId, text) => {
+        set({
+          nodes: get().nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            const next: ChecklistItem = { id: crypto.randomUUID(), text, done: false };
+            const checklist = [...(n.data.checklist ?? []), next];
+            const completed = checklist.length > 0 ? checklist.every((i) => i.done) : n.data.completed;
+            return { ...n, data: { ...n.data, checklist, completed } };
+          }),
+        });
+      },
+
+      updateChecklistItem: (nodeId, itemId, patch) => {
+        set({
+          nodes: get().nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            const checklist = (n.data.checklist ?? []).map((it) =>
+              it.id === itemId ? { ...it, ...patch } : it
+            );
+            const completed = checklist.length > 0 ? checklist.every((i) => i.done) : n.data.completed;
+            return { ...n, data: { ...n.data, checklist, completed } };
+          }),
+        });
+      },
+
+      removeChecklistItem: (nodeId, itemId) => {
+        set({
+          nodes: get().nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            const checklist = (n.data.checklist ?? []).filter((it) => it.id !== itemId);
+            const completed = checklist.length > 0 ? checklist.every((i) => i.done) : undefined;
+            // Если чеклист опустел — не насильно меняем completed; оставляем как было
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                checklist: checklist.length > 0 ? checklist : undefined,
+                completed: completed ?? n.data.completed,
+              },
+            };
+          }),
+        });
+      },
+
+      reorderChecklist: (nodeId, fromIndex, toIndex) => {
+        set({
+          nodes: get().nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            const list = [...(n.data.checklist ?? [])];
+            if (fromIndex < 0 || fromIndex >= list.length || toIndex < 0 || toIndex >= list.length) return n;
+            const [moved] = list.splice(fromIndex, 1);
+            list.splice(toIndex, 0, moved);
+            const completed = list.length > 0 ? list.every((i) => i.done) : n.data.completed;
+            return { ...n, data: { ...n.data, checklist: list, completed } };
+          }),
+        });
+      },
     }),
     {
       name: STORAGE_KEY,

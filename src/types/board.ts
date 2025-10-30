@@ -14,6 +14,9 @@ export type TaskData = {
   difficulty: "Легкая" | "Средняя" | "Сложная";
   taskType: TaskType;
   completed?: boolean;
+  // Чеклист подзадач: позволяет отмечать выполнение по пунктам.
+  // Если чеклист не пустой, статус карточки выводится из него (все пункты done => completed=true).
+  checklist?: ChecklistItem[];
 };
 
 export type TaskNode = {
@@ -35,4 +38,10 @@ export type DependencyEdge = {
 export type BoardState = {
   nodes: TaskNode[];
   edges: DependencyEdge[];
+};
+
+export type ChecklistItem = {
+  id: string;
+  text: string;
+  done: boolean;
 };

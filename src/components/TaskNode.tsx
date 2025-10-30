@@ -36,6 +36,7 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
   const edges = useBoardStore((s) => s.edges);
   const nodes = useBoardStore((s) => s.nodes);
   const updateNode = useBoardStore((s) => s.updateNode);
+  const updateChecklistItem = useBoardStore((s) => s.updateChecklistItem);
 
   const onDoubleClick = useCallback(() => setOpen(true), []);
 
@@ -45,7 +46,12 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
     return !!dep?.data.completed;
   });
   const isCompleted = !!data.completed;
-  const canComplete = !isCompleted && (incoming.length === 0 || allDepsDone);
+  const checklist = data.checklist ?? [];
+  const allItemsDone = checklist.length === 0 || checklist.every((i) => i.done);
+  // Готовность к работе (для активного режима) определяется только зависимостями и тем, что задача не завершена
+  const canWork = !isCompleted && (incoming.length === 0 || allDepsDone);
+  // Возможность завершить учитывает и чеклист
+  const canComplete = canWork && allItemsDone;
 
   const markDone = () => {
     if (!canComplete) return;
@@ -62,7 +68,7 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
 
   // Active tasks highlighting
   const activeMode = useBoardStore((s) => s.activeMode);
-  const modeClass = activeMode ? (canComplete ? "ring-4 ring-green-500/60 shadow-xl" : "opacity-50 grayscale") : "";
+  const modeClass = activeMode ? (canWork ? "ring-4 ring-green-500/60 shadow-xl" : "opacity-50 grayscale") : "";
 
   return (
     <div
@@ -80,6 +86,38 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
         </div>
         {data.description ? (
           <p className="text-sm/5 text-slate-700 break-words whitespace-pre-wrap">{data.description}</p>
+        ) : null}
+        {checklist.length > 0 ? (
+          <div className="mt-1 space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-600">
+              <span>Чеклист</span>
+              <span>
+                {checklist.filter((i) => i.done).length}/{checklist.length}
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded bg-slate-200 overflow-hidden">
+              <div
+                className={`${typeToBg[data.taskType as TaskType]} h-full transition-all`}
+                style={{ width: `${Math.round((checklist.filter((i) => i.done).length / checklist.length) * 100)}%` }}
+              />
+            </div>
+            <ul className="space-y-1 max-h-40 overflow-auto pr-1">
+              {checklist.map((item) => (
+                <li key={item.id} className="flex items-start gap-2 text-sm">
+                  <input
+                    aria-label="Готово"
+                    className="mt-1 h-5 w-5 accent-green-600"
+                    type="checkbox"
+                    checked={!!item.done}
+                    onChange={(e) => updateChecklistItem(id, item.id, { done: e.target.checked })}
+                  />
+                  <span className={`flex-1 break-words ${item.done ? "line-through text-slate-400" : "text-slate-800"}`}>
+                    {item.text}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
         <div className="mt-1 flex items-center justify-between">
           <span className="text-xs font-medium text-slate-600">{labelForType(data.taskType)}</span>

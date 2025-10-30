@@ -6,9 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { useBoardStore } from "@/store/useBoardStore";
-import type { TaskData, TaskType } from "@/types/board";
+import type { TaskData, TaskType, ChecklistItem } from "@/types/board";
 import { useViewport } from "reactflow";
 import { centerPosition } from "@/lib/graph";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+ 
 
 const defaultData: TaskData = {
   title: "",
@@ -20,6 +24,8 @@ const defaultData: TaskData = {
 export function CreateTaskDialog() {
   const [open, setOpen] = React.useState(false);
   const [data, setData] = React.useState<TaskData>(defaultData);
+  const [checklist, setChecklist] = React.useState<ChecklistItem[]>([]);
+  const [newItem, setNewItem] = React.useState("");
   const addNode = useBoardStore((s) => s.addNode);
   const viewport = useViewport();
 
@@ -27,9 +33,18 @@ export function CreateTaskDialog() {
     e.preventDefault();
     if (!data.title.trim()) return;
     const pos = centerPosition(viewport);
-    addNode({ ...data, description: data.description?.trim() || undefined }, pos);
+    const cl = checklist.map((i) => ({ ...i, text: i.text.trim() })).filter((i) => i.text.length > 0);
+    const completed = cl.length > 0 ? cl.every((i) => i.done) : undefined;
+    addNode({
+      ...data,
+      description: data.description?.trim() || undefined,
+      checklist: cl.length ? cl : undefined,
+      completed,
+    }, pos);
     setOpen(false);
     setData(defaultData);
+    setChecklist([]);
+    setNewItem("");
   };
 
   return (
@@ -95,6 +110,76 @@ export function CreateTaskDialog() {
                 ]}
               />
             </label>
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-slate-700">Чеклист</div>
+              <div className="flex gap-2">
+                <Input
+                  aria-label="Новый пункт"
+                  placeholder="Добавить пункт"
+                  value={newItem}
+                  onChange={(e) => setNewItem(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    const text = newItem.trim();
+                    if (!text) return;
+                    setChecklist((l) => [...l, { id: crypto.randomUUID(), text, done: false }]);
+                    setNewItem("");
+                  }}
+                >
+                  Добавить
+                </Button>
+              </div>
+              {checklist.length > 0 ? (
+                <DndContext
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e: DragEndEvent) => {
+                    const { active, over } = e;
+                    if (!over || active.id === over.id) return;
+                    const oldIndex = checklist.findIndex((i) => i.id === active.id);
+                    const newIndex = checklist.findIndex((i) => i.id === over.id);
+                    setChecklist((l) => arrayMove(l, oldIndex, newIndex));
+                  }}
+                >
+                  <SortableContext items={checklist.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                    <ul className="max-h-48 overflow-auto space-y-2">
+                      {checklist.map((item) => (
+                        <SortableItem key={item.id} id={item.id}>
+                          <div className="flex items-center gap-2">
+                            <input
+                              aria-label="Готово"
+                              type="checkbox"
+                              className="h-5 w-5 accent-green-600"
+                              checked={item.done}
+                              onChange={(e) =>
+                                setChecklist((l) => l.map((it) => (it.id === item.id ? { ...it, done: e.target.checked } : it)))
+                              }
+                            />
+                            <Input
+                              aria-label="Текст пункта"
+                              value={item.text}
+                              onChange={(e) =>
+                                setChecklist((l) => l.map((it) => (it.id === item.id ? { ...it, text: e.target.value } : it)))
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => setChecklist((l) => l.filter((it) => it.id !== item.id))}
+                            >
+                              Удалить
+                            </Button>
+                          </div>
+                        </SortableItem>
+                      ))}
+                    </ul>
+                  </SortableContext>
+                </DndContext>
+              ) : null}
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={() => setOpen(false)} aria-label="Отменить">
@@ -105,5 +190,18 @@ export function CreateTaskDialog() {
         </form>
       </Dialog>
     </>
+  );
+}
+
+function SortableItem({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  return (
+    <li ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </li>
   );
 }
