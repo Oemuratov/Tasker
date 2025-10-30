@@ -108,6 +108,7 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
                     aria-label="Готово"
                     className="mt-1 h-5 w-5 accent-green-600"
                     type="checkbox"
+                    disabled={!canWork}
                     checked={!!item.done}
                     onChange={(e) => updateChecklistItem(id, item.id, { done: e.target.checked })}
                   />
