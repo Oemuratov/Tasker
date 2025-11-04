@@ -23,6 +23,9 @@ type Actions = {
   ) => void;
   removeChecklistItem: (nodeId: string, itemId: string) => void;
   reorderChecklist: (nodeId: string, fromIndex: number, toIndex: number) => void;
+  // Таймер активности
+  startTimer: (nodeId: string) => void;
+  pauseTimer: (nodeId: string) => void;
 };
 
 type Store = BoardState & Actions & {
@@ -57,6 +60,19 @@ export const useBoardStore = create<Store>()(
             const cl = nextData.checklist;
             if (Array.isArray(cl) && cl.length > 0) {
               nextData.completed = cl.every((i) => !!i.done);
+            }
+            // При завершении задачи сохраняем финальное время выполнения
+            if (nextData.completed && !n.data.completed && n.data.activeStartTime) {
+              const now = Date.now();
+              const currentDuration = (n.data.accumulatedDuration || 0) + (now - n.data.activeStartTime) / 1000;
+              nextData.completedDuration = currentDuration;
+              nextData.activeStartTime = undefined;
+              nextData.accumulatedDuration = undefined;
+            }
+            // При отмене выполнения восстанавливаем накопленное время из completedDuration
+            if (!nextData.completed && n.data.completed && n.data.completedDuration) {
+              nextData.accumulatedDuration = n.data.completedDuration;
+              nextData.completedDuration = undefined;
             }
             return { ...n, data: nextData };
           }),
@@ -145,6 +161,52 @@ export const useBoardStore = create<Store>()(
             list.splice(toIndex, 0, moved);
             const completed = list.length > 0 ? list.every((i) => i.done) : n.data.completed;
             return { ...n, data: { ...n.data, checklist: list, completed } };
+          }),
+        });
+      },
+
+      // ---- Таймер активности ----
+      // Запускает таймер для задачи (когда она становится активной)
+      startTimer: (nodeId) => {
+        const now = Date.now();
+        set({
+          nodes: get().nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            // Если таймер уже запущен, не делаем ничего
+            if (n.data.activeStartTime) return n;
+            // Инициализируем накопленное время, если его еще нет
+            const accumulatedDuration = n.data.accumulatedDuration ?? 0;
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                activeStartTime: now,
+                accumulatedDuration,
+              },
+            };
+          }),
+        });
+      },
+
+      // Останавливает таймер и сохраняет накопленное время (когда задача теряет активность)
+      pauseTimer: (nodeId) => {
+        const now = Date.now();
+        set({
+          nodes: get().nodes.map((n) => {
+            if (n.id !== nodeId) return n;
+            // Если таймер не запущен, не делаем ничего
+            if (!n.data.activeStartTime) return n;
+            // Сохраняем накопленное время: текущее накопленное + текущий период активности
+            const currentDuration = (now - n.data.activeStartTime) / 1000;
+            const accumulatedDuration = (n.data.accumulatedDuration || 0) + currentDuration;
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                activeStartTime: undefined,
+                accumulatedDuration,
+              },
+            };
           }),
         });
       },

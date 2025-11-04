@@ -1,10 +1,11 @@
 "use client";
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useEffect, useRef } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import type { TaskNode as TNode, TaskType } from "@/types/board";
 import { Button } from "@/components/ui/button";
 import { EditTaskDialog } from "@/components/EditTaskDialog";
 import { useBoardStore } from "@/store/useBoardStore";
+import { formatDuration } from "@/lib/formatDuration";
 
 // Accent colors for task types (border + button color). Use ! to ensure override.
 type Accent = { border: string; btn: string; ring: string };
@@ -33,10 +34,14 @@ const typeToBg: Record<TaskType, string> = {
 export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
   const { data, id } = props;
   const [open, setOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const edges = useBoardStore((s) => s.edges);
   const nodes = useBoardStore((s) => s.nodes);
   const updateNode = useBoardStore((s) => s.updateNode);
   const updateChecklistItem = useBoardStore((s) => s.updateChecklistItem);
+  const startTimer = useBoardStore((s) => s.startTimer);
+  const pauseTimer = useBoardStore((s) => s.pauseTimer);
+  const prevCanWorkRef = useRef<boolean | null>(null);
 
   const onDoubleClick = useCallback(() => setOpen(true), []);
 
@@ -69,6 +74,80 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
   // Active tasks highlighting
   const activeMode = useBoardStore((s) => s.activeMode);
   const modeClass = activeMode ? (canWork ? "ring-4 ring-green-500/60 shadow-xl" : "opacity-50 grayscale") : "";
+
+  // Инициализация: проверяем статус активности при монтировании компонента
+  useEffect(() => {
+    // Инициализируем prevCanWorkRef при первом рендере
+    if (prevCanWorkRef.current === null) {
+      prevCanWorkRef.current = canWork;
+      // Если задача активна при монтировании, но таймер не запущен - запускаем его
+      // Это может произойти при восстановлении состояния из store
+      if (canWork && !isCompleted) {
+        if (!data.activeStartTime) {
+          // Таймер не запущен - запускаем
+          startTimer(id);
+        } else {
+          // Таймер был запущен, но возможно устарел при восстановлении из store
+          // Проверяем, не слишком ли старый activeStartTime (больше 1 часа назад)
+          const now = Date.now();
+          const timeSinceStart = (now - data.activeStartTime) / 1000;
+          // Если прошло больше часа, считаем что это устаревшее значение
+          // и перезапускаем таймер (накопленное время уже сохранено в accumulatedDuration)
+          if (timeSinceStart > 3600) {
+            pauseTimer(id); // Сохраняем текущий период в accumulatedDuration
+            startTimer(id); // Перезапускаем таймер
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Только при монтировании
+
+  // Отслеживание изменений статуса активности и управление таймером
+  useEffect(() => {
+    // Если статус активности изменился
+    if (prevCanWorkRef.current !== canWork) {
+      if (canWork && !isCompleted) {
+        // Задача стала активной - запускаем таймер
+        startTimer(id);
+      } else if (!canWork && prevCanWorkRef.current === true) {
+        // Задача потеряла активность - останавливаем таймер
+        pauseTimer(id);
+      }
+      prevCanWorkRef.current = canWork;
+    }
+  }, [canWork, isCompleted, id, startTimer, pauseTimer]);
+
+  // Расчет текущего времени для таймера
+  useEffect(() => {
+    // Если задача завершена или неактивна, не обновляем таймер
+    if (isCompleted || !canWork) {
+      return;
+    }
+    // Если задача активна, обновляем время каждую секунду
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isCompleted, canWork]);
+
+  // Вычисление текущего времени активности
+  const getCurrentDuration = (): number => {
+    if (isCompleted && data.completedDuration !== undefined) {
+      // Задача завершена - возвращаем финальное время
+      return data.completedDuration;
+    }
+    if (canWork && data.activeStartTime) {
+      // Задача активна - накопленное время + текущий период
+      const currentPeriod = (currentTime - data.activeStartTime) / 1000;
+      return (data.accumulatedDuration || 0) + currentPeriod;
+    }
+    // Задача неактивна - возвращаем накопленное время (если есть)
+    return data.accumulatedDuration || 0;
+  };
+
+  const duration = getCurrentDuration();
+  const showTimer = (isCompleted && data.completedDuration !== undefined) || (canWork && duration > 0);
 
   return (
     <div
@@ -163,6 +242,15 @@ export const TaskNode = memo((props: NodeProps<TNode["data"]>) => {
       {isCompleted ? (
         <div className="absolute -top-3 -right-3 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-green-600 shadow">
           ✓
+        </div>
+      ) : null}
+
+      {/* Таймер активности в левом нижнем углу */}
+      {showTimer ? (
+        <div className="absolute bottom-3 left-5 text-xs text-slate-600 font-medium">
+          {isCompleted && data.completedDuration !== undefined
+            ? `Выполнено за: ${formatDuration(data.completedDuration)}`
+            : formatDuration(duration)}
         </div>
       ) : null}
 
